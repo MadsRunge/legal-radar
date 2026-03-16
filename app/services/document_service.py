@@ -7,7 +7,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import DocumentORM
+from app.db.models import DocumentORM, SummaryORM
 from app.models.document import Document, DocumentCreate, DocumentListResponse
 
 
@@ -62,9 +62,13 @@ async def list_documents(
         query = query.where(DocumentORM.legal_area == legal_area)
         count_query = count_query.where(DocumentORM.legal_area == legal_area)
 
-    # principial_only filter requires a join to summaries — placeholder for now
     if principial_only:
-        logger.debug("principial_only filter is a stub — implement via SummaryORM join")
+        query = query.join(SummaryORM, DocumentORM.id == SummaryORM.document_id).where(
+            SummaryORM.principial == True  # noqa: E712
+        )
+        count_query = count_query.join(SummaryORM, DocumentORM.id == SummaryORM.document_id).where(
+            SummaryORM.principial == True  # noqa: E712
+        )
 
     total_result = await session.execute(count_query)
     total = total_result.scalar_one()

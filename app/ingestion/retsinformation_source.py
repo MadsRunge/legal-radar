@@ -10,11 +10,11 @@ Strategy:
   4. Return as RawDocument list
 """
 
-import re
-import xml.etree.ElementTree as ET
-from datetime import date, datetime
+import time
+from datetime import date
 from html.parser import HTMLParser
 
+import feedparser
 import httpx
 from loguru import logger
 
@@ -87,35 +87,14 @@ def _matches_environmental(text: str) -> bool:
 # Date parsing
 # ---------------------------------------------------------------------------
 
-_DATE_FORMATS = [
-    "%a, %d %b %Y %H:%M:%S %z",
-    "%a, %d %b %Y %H:%M:%S GMT",
-    "%Y-%m-%dT%H:%M:%S%z",
-    "%Y-%m-%d",
-]
 
-
-def _parse_date(raw: str | None) -> date:
-    if not raw:
+def _parse_time_struct(ts: time.struct_time | None) -> date:
+    if ts is None:
         return date.today()
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(raw.strip(), fmt).date()
-        except ValueError:
-            continue
-    logger.warning("Could not parse date, using today", raw=raw)
-    return date.today()
-
-
-# ---------------------------------------------------------------------------
-# XML namespace helper
-# ---------------------------------------------------------------------------
-
-_NS_RE = re.compile(r"\{[^}]*\}")
-
-
-def _tag(el: ET.Element) -> str:
-    return _NS_RE.sub("", el.tag)
+    try:
+        return date(ts.tm_year, ts.tm_mon, ts.tm_mday)
+    except (ValueError, AttributeError):
+        return date.today()
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +105,7 @@ class RetsinformationSource(LegalSource):
     """Fetches recent environmental law documents from retsinformation.dk RSS."""
 
     name = "retsinformation"
-    legal_area = "environmental_law"
+    legal_area = "environment"
 
     def __init__(
         self,
@@ -178,40 +157,21 @@ class RetsinformationSource(LegalSource):
 
         return self._parse_rss(resp.text)
 
-    def _parse_rss(self, xml_text: str) -> list[dict[str, object]]:
-        try:
-            root = ET.fromstring(xml_text)
-        except ET.ParseError as exc:
-            logger.error("RSS parse error", source=self.name, error=str(exc))
+    def _parse_rss(self, raw: str) -> list[dict[str, object]]:
+        feed = feedparser.parse(raw)
+        if feed.bozo and not feed.entries:
+            logger.error("RSS parse error", source=self.name, error=str(feed.bozo_exception))
             return []
 
         entries: list[dict[str, object]] = []
-        # Handle both RSS 2.0 (<item>) and Atom (<entry>)
-        for item in root.iter():
-            if _tag(item) not in ("item", "entry"):
-                continue
-
-            title = ""
-            url = ""
-            summary = ""
-            pub_date: date = date.today()
-
-            for child in item:
-                t = _tag(child)
-                text = (child.text or "").strip()
-                if t == "title":
-                    title = text
-                elif t in ("link", "id"):
-                    url = url or text
-                elif t in ("description", "summary", "content"):
-                    summary = text
-                elif t in ("pubDate", "published", "updated"):
-                    pub_date = _parse_date(text)
+        for entry in feed.entries:
+            title = entry.get("title", "").strip()
+            url = entry.get("link", "").strip()
+            summary = entry.get("summary", "").strip()
+            pub_date = _parse_time_struct(entry.get("published_parsed") or entry.get("updated_parsed"))
 
             if title and url:
-                entries.append(
-                    {"title": title, "url": url, "summary": summary, "pub_date": pub_date}
-                )
+                entries.append({"title": title, "url": url, "summary": summary, "pub_date": pub_date})
 
         return entries
 

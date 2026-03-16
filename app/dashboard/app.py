@@ -45,15 +45,15 @@ dash_app.layout = html.Div(
                         id="filter-legal-area",
                         options=[
                             {"label": "All areas", "value": ""},
-                            {"label": "Tax", "value": "tax"},
-                            {"label": "Employment", "value": "employment"},
-                            {"label": "Competition", "value": "competition"},
-                            {"label": "EU Law", "value": "EU law"},
-                            {"label": "Criminal", "value": "criminal"},
+                            {"label": "Environment", "value": "environment"},
+                            {"label": "Planning Law", "value": "planning_law"},
+                            {"label": "Nature Protection", "value": "nature_protection"},
+                            {"label": "Waste Regulation", "value": "waste_regulation"},
+                            {"label": "Water Regulation", "value": "water_regulation"},
                         ],
                         value="",
                         clearable=False,
-                        style={"width": "200px"},
+                        style={"width": "220px"},
                     ),
                 ]),
                 html.Div([
@@ -195,6 +195,67 @@ def show_document_detail(
     except Exception as exc:
         return html.Div(f"Error loading document: {exc}", style={"color": "red"})
 
+    # Try to load summary for novelty score and principial flag
+    summary = None
+    try:
+        sum_resp = httpx.get(f"{API_BASE}/documents/{doc_id}/summary", timeout=10.0)
+        if sum_resp.status_code == 200:
+            summary = sum_resp.json()
+    except Exception:
+        pass
+
+    badges = []
+    if summary and summary.get("principial"):
+        badges.append(
+            html.Span(
+                "Principial Decision",
+                style={
+                    "backgroundColor": "#4361ee",
+                    "color": "white",
+                    "fontSize": "11px",
+                    "fontWeight": "700",
+                    "padding": "3px 10px",
+                    "borderRadius": "12px",
+                    "marginRight": "8px",
+                    "letterSpacing": "0.5px",
+                },
+            )
+        )
+
+    novelty_section = []
+    if summary and summary.get("novelty_score") is not None:
+        score = float(summary["novelty_score"])
+        novelty_section = [
+            html.Div(
+                style={"marginBottom": "16px"},
+                children=[
+                    html.Label(
+                        f"Novelty Score: {score:.0%}",
+                        style={"fontSize": "12px", "fontWeight": "600", "color": "#555", "marginBottom": "4px", "display": "block"},
+                    ),
+                    html.Div(
+                        style={"backgroundColor": "#e0e0e0", "borderRadius": "4px", "height": "8px", "width": "100%"},
+                        children=[
+                            html.Div(
+                                style={
+                                    "backgroundColor": "#4361ee",
+                                    "height": "8px",
+                                    "borderRadius": "4px",
+                                    "width": f"{score * 100:.0f}%",
+                                }
+                            )
+                        ],
+                    ),
+                ],
+            )
+        ]
+
+    raw_preview = (
+        doc.get("raw_text", "")[:500] + "…"
+        if doc.get("raw_text")
+        else "No full text available."
+    )
+
     return html.Div(
         style={
             "border": "1px solid #e0e0e0",
@@ -203,18 +264,17 @@ def show_document_detail(
             "backgroundColor": "#f9f9ff",
         },
         children=[
-            html.H3(doc.get("title", ""), style={"marginBottom": "8px", "color": "#1a1a2e"}),
+            html.Div(
+                style={"display": "flex", "alignItems": "center", "marginBottom": "8px"},
+                children=[html.H3(doc.get("title", ""), style={"margin": "0", "color": "#1a1a2e", "flex": "1"})] + badges,
+            ),
             html.P(
                 f"Source: {doc.get('source', '')} · Published: {doc.get('publication_date', '')} · Area: {doc.get('legal_area', '')}",
                 style={"color": "#666", "fontSize": "13px", "marginBottom": "16px"},
             ),
+            *novelty_section,
             html.Hr(),
-            html.P(
-                doc.get("raw_text", "No content available.")[:500] + "…"
-                if doc.get("raw_text")
-                else "No full text available.",
-                style={"lineHeight": "1.6"},
-            ),
+            html.P(raw_preview, style={"lineHeight": "1.6"}),
         ],
     )
 
