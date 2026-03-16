@@ -106,6 +106,10 @@ async def create_document(
         publication_date=data.publication_date,
         legal_area=data.legal_area,
         raw_text=data.raw_text,
+        external_id=data.external_id,
+        source_entity=data.source_entity,
+        document_kind=data.document_kind,
+        source_metadata=data.source_metadata,
     )
     session.add(orm_obj)
     await session.flush()  # populate id + timestamps without committing

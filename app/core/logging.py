@@ -5,6 +5,18 @@ import sys
 from loguru import logger
 
 
+def _format(record: dict) -> str:
+    extra = record["extra"]
+    fields = " ".join(f"{k}={v}" for k, v in extra.items()) if extra else ""
+    suffix = f"  {fields}" if fields else ""
+    return (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> — "
+        f"<level>{{message}}</level>{suffix}\n"
+    )
+
+
 def configure_logging(level: str = "INFO", json_logs: bool = False) -> None:
     """Configure loguru for the application.
 
@@ -25,12 +37,7 @@ def configure_logging(level: str = "INFO", json_logs: bool = False) -> None:
         logger.add(
             sys.stdout,
             level=level,
-            format=(
-                "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-                "<level>{level: <8}</level> | "
-                "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> — "
-                "<level>{message}</level>"
-            ),
+            format=_format,
             colorize=True,
             enqueue=True,
         )

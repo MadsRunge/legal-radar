@@ -9,7 +9,7 @@ from app.dashboard.utils.formatters import pretty_slug
 
 def build_filter_options(
     documents: list[dict[str, object]] | None,
-) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
     """Build dynamic dropdown options from loaded documents."""
     items = documents or []
     legal_areas = sorted(
@@ -19,6 +19,13 @@ def build_filter_options(
         }.items()
     )
     sources = sorted({str(doc.get("source", "")) for doc in items if doc.get("source")})
+    document_kinds = sorted(
+        {
+            pretty_slug(str(doc.get("document_kind"))) if doc.get("document_kind") else "Ikke angivet": str(doc.get("document_kind", ""))
+            for doc in items
+            if doc.get("document_kind") is not None
+        }.items()
+    )
 
     legal_area_options = [{"label": "Alle retsområder", "value": ""}] + [
         {"label": label, "value": value} for label, value in legal_areas
@@ -26,7 +33,10 @@ def build_filter_options(
     source_options = [{"label": "Alle kilder", "value": ""}] + [
         {"label": source, "value": source} for source in sources
     ]
-    return legal_area_options, source_options
+    document_kind_options = [{"label": "Alle dokumenttyper", "value": ""}] + [
+        {"label": label, "value": value} for label, value in document_kinds
+    ]
+    return legal_area_options, source_options, document_kind_options
 
 
 def build_filter_sidebar() -> html.Aside:
@@ -158,6 +168,26 @@ def build_filter_sidebar() -> html.Aside:
                             ),
                             dcc.Dropdown(
                                 id="filter-source",
+                                value="",
+                                clearable=False,
+                                style={"marginTop": "6px"},
+                            ),
+                        ]
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label(
+                                "Dokumenttype",
+                                style={
+                                    "fontSize": "13px",
+                                    "fontWeight": "700",
+                                    "color": THEME["text"],
+                                    "display": "block",
+                                    "marginBottom": "4px",
+                                },
+                            ),
+                            dcc.Dropdown(
+                                id="filter-document-kind",
                                 value="",
                                 clearable=False,
                                 style={"marginTop": "6px"},

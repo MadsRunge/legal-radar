@@ -15,6 +15,10 @@ class DocumentBase(BaseModel):
     publication_date: date = Field(..., description="Date the document was officially published")
     legal_area: str = Field(..., description="Legal domain (e.g. tax, employment, competition)")
     raw_text: str | None = Field(default=None, description="Full extracted text of the document")
+    external_id: int | None = Field(default=None, description="Source-system numeric ID (e.g. ODA Sag.id)")
+    source_entity: str | None = Field(default=None, description="Source entity type (e.g. 'Sag', 'Dokument')")
+    document_kind: str | None = Field(default=None, description="Document kind (e.g. 'bill', 'judgment')")
+    source_metadata: dict | None = Field(default=None, description="Source-specific metadata as JSON")
 
 
 class DocumentCreate(DocumentBase):

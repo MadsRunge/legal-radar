@@ -11,6 +11,45 @@ from app.dashboard.utils.api import fetch_json
 from app.dashboard.utils.formatters import excerpt, format_date, pretty_slug
 
 
+def build_detail_page(
+    api_base: str,
+    doc_id: str,
+    documents: list[dict[str, Any]] | None,
+) -> object:
+    """Full-page wrapper for the document analysis view."""
+    return html.Div(
+        style={
+            "minHeight": "100vh",
+            "background": (
+                "radial-gradient(circle at top left, rgba(122, 31, 36, 0.08) 0%, rgba(122, 31, 36, 0.0) 22%), "
+                "radial-gradient(circle at 80% 18%, rgba(182, 91, 58, 0.08) 0%, rgba(182, 91, 58, 0.0) 18%), "
+                "linear-gradient(180deg, #fbf8f3 0%, #f4efe8 48%, #efe8de 100%)"
+            ),
+            "padding": "28px 18px 64px",
+            "fontFamily": THEME["font_sans"],
+            "color": THEME["text"],
+        },
+        children=[
+            html.Div(
+                style={"maxWidth": "900px", "margin": "0 auto", "display": "flex", "flexDirection": "column", "gap": "22px"},
+                children=[
+                    html.A(
+                        "← Tilbage til oversigt",
+                        href="/",
+                        style={
+                            "color": THEME["primary"],
+                            "fontWeight": "700",
+                            "textDecoration": "none",
+                            "fontSize": "14px",
+                        },
+                    ),
+                    build_detail_panel(api_base, doc_id, documents),
+                ],
+            )
+        ],
+    )
+
+
 def build_detail_panel(
     api_base: str,
     selected_document_id: str | None,
@@ -22,11 +61,7 @@ def build_detail_panel(
         return html.Div()
 
     if not selected_document_id:
-        return info_panel(
-            "Vælg et dokument",
-            "Når du åbner et dokument fra feedet, vises analysefladen her.",
-            tone="accent",
-        )
+        return html.Div()
 
     fallback_document = next(
         (doc for doc in items if str(doc.get("id")) == str(selected_document_id)),
@@ -45,6 +80,7 @@ def build_detail_panel(
         document = fallback_document
 
     summary: dict[str, Any] | None = None
+    assets: list[dict[str, Any]] = []
     summary_state = "pending_endpoint"
     try:
         response = httpx.get(f"{api_base}/documents/{selected_document_id}/summary", timeout=10.0)
@@ -57,6 +93,11 @@ def build_detail_panel(
             summary_state = "error"
     except Exception:
         summary_state = "missing_endpoint"
+
+    try:
+        assets = fetch_json(api_base, f"/documents/{selected_document_id}/assets")
+    except Exception:
+        assets = []
 
     if summary:
         summary_panel = html.Div(
@@ -107,6 +148,10 @@ def build_detail_panel(
         badge(pretty_slug(str(document.get("legal_area") or "")), "primary"),
         badge(str(document.get("source", "Ukendt kilde")), "neutral"),
     ]
+    if document.get("document_kind"):
+        meta_badges.append(badge(pretty_slug(str(document.get("document_kind"))), "neutral"))
+    if document.get("source_entity"):
+        meta_badges.append(badge(str(document.get("source_entity")), "neutral"))
     if summary and summary.get("principial"):
         meta_badges.append(badge("Principiel udvikling", "accent"))
 
@@ -137,14 +182,72 @@ def build_detail_panel(
                 ),
                 html.Div(
                     [
+                        html.Strong("Datakilde-ID: "),
+                        html.Span(str(document.get("external_id") or "Ikke angivet")),
+                    ]
+                ),
+                html.Div(
+                    [
                         html.Strong("Næste integrationsskridt: "),
                         html.Span(
-                            "koble AI-summary-felterne på, så dette panel kan vise hvad der "
-                            "er ændret, hvilke regler der påvirkes, og hvem ændringen er relevant for."
+                            "bruge relaterede kildedokumenter aktivt i vurderingen, så juristen "
+                            "kan se hvilke underliggende tekster sagen bygger på."
                         ),
                     ]
                 ),
             ],
+        ),
+    )
+
+    metadata_rows = [
+        ("Publiceret", format_date(str(document.get("publication_date") or ""))),
+        ("Kilde", str(document.get("source") or "Ukendt")),
+        ("Entity", str(document.get("source_entity") or "Ikke angivet")),
+        ("Dokumenttype", pretty_slug(str(document.get("document_kind") or "")) or "Ikke angivet"),
+        ("External ID", str(document.get("external_id") or "Ikke angivet")),
+    ]
+
+    source_metadata = document.get("source_metadata") or {}
+    if isinstance(source_metadata, dict):
+        for key in ("offentlighedskode", "typeid", "statusdato"):
+            if source_metadata.get(key):
+                metadata_rows.append((pretty_slug(key), str(source_metadata.get(key))))
+
+    asset_children = [
+        html.Div(
+            style={
+                "padding": "14px 16px",
+                "borderRadius": THEME["radius_sm"],
+                "border": f"1px solid {THEME['border']}",
+                "backgroundColor": THEME["surface_alt"],
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": "6px",
+            },
+            children=[
+                html.Div(
+                    style={"display": "flex", "gap": "8px", "flexWrap": "wrap"},
+                    children=[
+                        badge(str(asset.get("relation_type", "other")), "accent"),
+                        badge(str(asset.get("source_entity", "Asset")), "neutral"),
+                    ],
+                ),
+                html.Strong(str(asset.get("title") or "Uden titel")),
+                html.Span(
+                    "Publiceret: "
+                    f"{format_date(str(asset.get('publication_date') or ''))}",
+                    style={"color": THEME["muted"], "fontSize": "13px"},
+                ),
+            ],
+        )
+        for asset in assets
+    ]
+
+    assets_block = info_panel(
+        "Relaterede dokumenter",
+        html.Div(
+            style={"display": "flex", "flexDirection": "column", "gap": "10px"},
+            children=asset_children or [html.Span("Ingen relaterede kildedokumenter gemt endnu.")],
         ),
     )
 
@@ -219,10 +322,13 @@ def build_detail_panel(
                                     "color": THEME["muted"],
                                 },
                             ),
-                            html.P(
-                                f"Publiceret: {format_date(str(document.get('publication_date') or ''))}",
-                                style={"margin": "0 0 8px", "fontSize": "14px"},
-                            ),
+                            *[
+                                html.P(
+                                    f"{label}: {value}",
+                                    style={"margin": "0 0 8px", "fontSize": "14px"},
+                                )
+                                for label, value in metadata_rows
+                            ],
                             html.A(
                                 "Åbn original kilde",
                                 href=str(document.get("url", "#")),
@@ -246,5 +352,6 @@ def build_detail_panel(
                     html.Div(style={"flex": "1 1 280px"}, children=[relevance_block]),
                 ],
             ),
+            assets_block,
         ],
     )

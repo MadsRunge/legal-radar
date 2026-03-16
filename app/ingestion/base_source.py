@@ -3,7 +3,9 @@
 from abc import ABC, abstractmethod
 from datetime import date
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field
+
+from app.models.document_asset import DocumentAssetCreate
 
 
 class RawDocument(BaseModel):
@@ -18,6 +20,11 @@ class RawDocument(BaseModel):
     publication_date: date
     legal_area: str = "environmental_law"
     raw_text: str | None = None
+    external_id: int | None = None
+    source_entity: str | None = None
+    document_kind: str | None = None
+    source_metadata: dict = Field(default_factory=dict)
+    assets: list[DocumentAssetCreate] = Field(default_factory=list)
 
 
 class LegalSource(ABC):

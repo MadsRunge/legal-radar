@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/legal_radar"
 
     # AI
-    OPENAI_API_KEY: str = ""
-    FIRECRAWL_API_KEY: str = ""
+    DEEPSEEK_KEY: str = ""
+    GROK_XAI_KEY: str = ""
 
     # API server
     API_HOST: str = "0.0.0.0"

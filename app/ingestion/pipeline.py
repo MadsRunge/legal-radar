@@ -8,22 +8,25 @@ Responsibilities:
   5. Trigger AI summarization for each saved document
 """
 
+import asyncio
 from dataclasses import dataclass, field
 
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+import uuid
+
 from app.ai.summarizer import summarize_document
 from app.db.database import AsyncSessionLocal
 from app.db.models import DocumentORM
 from app.ingestion.base_source import LegalSource, RawDocument
-from app.ingestion.domsdatabasen_source import DomsdatabasenSource
 from app.ingestion.folketing_source import FolketingSource
-from app.ingestion.miljoeklagenavn_source import MiljoeklagenævnSource
 from app.ingestion.retsinformation_source import RetsinformationSource
 from app.models.document import DocumentCreate
+from app.services.document_asset_service import create_document_asset
 from app.services.document_service import create_document
+from app.services.summary_service import create_or_update_summary
 
 
 # ---------------------------------------------------------------------------
@@ -83,8 +86,6 @@ def default_sources() -> list[LegalSource]:
     return [
         RetsinformationSource(),
         FolketingSource(),
-        DomsdatabasenSource(),
-        MiljoeklagenævnSource(),
     ]
 
 
@@ -104,9 +105,11 @@ class IngestionPipeline:
         self,
         sources: list[LegalSource] | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
+        run_ai: bool = True,
     ) -> None:
         self._sources = sources if sources is not None else default_sources()
         self._session_factory = session_factory or AsyncSessionLocal
+        self._run_ai = run_ai
 
     async def run_once(self) -> PipelineResult:
         """Execute one full ingestion pass across all sources.
@@ -132,19 +135,29 @@ class IngestionPipeline:
             source_result.found = len(docs)
             logger.info("documents_found", source=source.name, count=len(docs))
 
+            # Collect (text, title, id) tuples for AI tasks; fired only after commit
+            # so the document FK is guaranteed visible to the summary session.
+            pending_ai: list[tuple[str, str, uuid.UUID]] = []
+
             async with self._session_factory() as session:
                 for doc in docs:
                     try:
-                        saved_count = await self._process_document(
+                        saved_count, ai_job = await self._process_document(
                             session, doc, source_result
                         )
                         source_result.saved += saved_count
+                        if ai_job:
+                            pending_ai.append(ai_job)
                     except Exception as exc:
                         msg = f"Error processing {doc.url}: {exc}"
                         logger.error(msg, source=source.name)
                         source_result.errors.append(msg)
 
                 await session.commit()
+
+            # Document rows are now committed — safe to write summaries against them
+            for text, title, doc_id in pending_ai:
+                asyncio.create_task(self._trigger_ai(text, title, doc_id))
 
             result.source_results.append(source_result)
 
@@ -156,32 +169,38 @@ class IngestionPipeline:
         session: AsyncSession,
         doc: RawDocument,
         source_result: SourceResult,
-    ) -> int:
-        """Persist a single document and trigger AI analysis.
+    ) -> tuple[int, tuple[str, str, uuid.UUID] | None]:
+        """Persist a single document and collect an AI job if applicable.
 
         Returns:
-            1 if saved, 0 if duplicate.
+            (1, ai_job) if saved, (0, None) if duplicate.
+            ai_job is (raw_text, title, document_id) — fired after commit by the caller.
         """
         if await self._is_duplicate(session, doc.url):
             logger.debug("Duplicate skipped", url=doc.url)
             source_result.skipped_duplicates += 1
-            return 0
+            return 0, None
 
         doc_create = DocumentCreate(
-            title=doc.title,
+            title=doc.title[:500],
             source=doc.source,
             url=doc.url,  # type: ignore[arg-type]  # Pydantic coerces str → HttpUrl
             publication_date=doc.publication_date,
             legal_area=doc.legal_area,
             raw_text=doc.raw_text,
+            external_id=doc.external_id,
+            source_entity=doc.source_entity,
+            document_kind=doc.document_kind,
+            source_metadata=doc.source_metadata or None,
         )
         saved = await create_document(session, doc_create)
         logger.info("documents_saved", source=doc.source, id=str(saved.id), title=doc.title)
 
-        # Trigger AI summarisation (non-blocking — failures are logged, not raised)
-        await self._trigger_ai(saved.raw_text or "", saved.title)
+        for asset in doc.assets:
+            await create_document_asset(session, saved.id, asset)
 
-        return 1
+        ai_job = (saved.raw_text or "", saved.title, saved.id) if self._run_ai else None
+        return 1, ai_job
 
     async def _is_duplicate(self, session: AsyncSession, url: str) -> bool:
         """Return True if a document with this URL already exists."""
@@ -190,14 +209,13 @@ class IngestionPipeline:
         )
         return result.scalar_one_or_none() is not None
 
-    async def _trigger_ai(self, text: str, title: str) -> None:
-        """Call the AI summarizer; log and swallow any errors."""
+    async def _trigger_ai(self, text: str, title: str, document_id: uuid.UUID) -> None:
+        """Call the AI summarizer and persist the result."""
         try:
-            summary = await summarize_document(text, title)
-            logger.debug(
-                "AI summary generated",
-                title=title,
-                novelty=summary.novelty_score,
-            )
+            result = await summarize_document(text, title)
+            async with self._session_factory() as session:
+                await create_or_update_summary(session, document_id, result)
+                await session.commit()
+            logger.debug("AI summary saved", document_id=str(document_id), novelty=result.novelty_score)
         except Exception as exc:
             logger.warning("AI summarization failed", title=title, error=str(exc))

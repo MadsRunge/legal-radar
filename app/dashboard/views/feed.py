@@ -14,6 +14,7 @@ def filter_documents(
     search_value: str,
     legal_area: str,
     source: str,
+    document_kind: str,
     has_text_only: list[str],
 ) -> list[dict[str, Any]]:
     """Apply client-side filters to loaded documents."""
@@ -25,6 +26,9 @@ def filter_documents(
 
     if source:
         filtered = [doc for doc in filtered if doc.get("source") == source]
+
+    if document_kind:
+        filtered = [doc for doc in filtered if doc.get("document_kind") == document_kind]
 
     if "has_text" in (has_text_only or []):
         filtered = [doc for doc in filtered if doc.get("raw_text")]
@@ -48,6 +52,19 @@ def filter_documents(
 
 def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
     has_text = bool(document.get("raw_text"))
+    kind = str(document.get("document_kind") or "")
+    source_entity = str(document.get("source_entity") or "")
+    badges = [badge(pretty_slug(str(document.get("legal_area") or "")), "primary")]
+    if kind:
+        badges.append(badge(pretty_slug(kind), "neutral"))
+    if source_entity:
+        badges.append(badge(source_entity, "neutral"))
+    badges.append(
+        badge(
+            "Kildetekst tilgængelig" if has_text else "Kun metadata",
+            "accent" if has_text else "neutral",
+        )
+    )
     return html.Div(
         style={
             "backgroundColor": THEME["surface"],
@@ -129,13 +146,7 @@ def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
                     "flexWrap": "wrap",
                     "marginBottom": "12px",
                 },
-                children=[
-                    badge(pretty_slug(str(document.get("legal_area") or "")), "primary"),
-                    badge(
-                        "Kildetekst tilgængelig" if has_text else "Kun metadata",
-                        "accent" if has_text else "neutral",
-                    ),
-                ],
+                children=badges,
             ),
             html.P(
                 excerpt(str(document.get("raw_text") or "")),
@@ -156,6 +167,7 @@ def build_documents_feed(
     search_value: str,
     legal_area: str,
     source: str,
+    document_kind: str,
     has_text_only: list[str],
     selected_document_id: str | None,
 ) -> object:
@@ -166,7 +178,14 @@ def build_documents_feed(
     if state.get("status") == "error":
         return html.Div()
 
-    filtered = filter_documents(items, search_value, legal_area, source, has_text_only)
+    filtered = filter_documents(
+        items,
+        search_value,
+        legal_area,
+        source,
+        document_kind,
+        has_text_only,
+    )
 
     header = html.Div(
         style={

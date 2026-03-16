@@ -1,10 +1,11 @@
 """CLI script to run the ingestion pipeline once.
 
 Usage:
-    uv run python scripts/run_ingestion.py
+    uv run python scripts/run_ingestion.py            # normal run (with AI)
+    uv run python scripts/run_ingestion.py --skip-ai  # seed run (no AI calls)
 
 Can be scheduled via cron:
-    0 * * * * cd /path/to/legal-radar && uv run python scripts/run_ingestion.py
+    0 6 * * * cd /path/to/legal-radar && uv run python scripts/run_ingestion.py
 """
 
 import asyncio
@@ -22,12 +23,14 @@ from app.ingestion.pipeline import IngestionPipeline  # noqa: E402
 
 
 async def main() -> int:
+    skip_ai = "--skip-ai" in sys.argv
+
     settings = get_settings()
     configure_logging(level="DEBUG" if not settings.is_production else "INFO")
 
-    logger.info("Starting ingestion run", env=settings.APP_ENV)
+    logger.info("Starting ingestion run", env=settings.APP_ENV, ai=not skip_ai)
 
-    pipeline = IngestionPipeline()
+    pipeline = IngestionPipeline(run_ai=not skip_ai)
     result = await pipeline.run_once()
 
     if result.total_errors > 0:
