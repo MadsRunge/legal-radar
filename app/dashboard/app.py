@@ -1,23 +1,24 @@
-"""Dash dashboard for Legal Radar.
+"""Dash dashboard entrypoint and callback wiring."""
 
-Fetches data from the FastAPI backend and renders:
-- A filterable table of recent legal updates
-- Novelty score indicator
-- AI summary panel
-"""
+from __future__ import annotations
 
-import httpx
+from datetime import datetime
+from typing import Any
+
 import dash
-from dash import Input, Output, callback, dash_table, dcc, html
+from dash import ALL, Input, Output, State, callback, ctx, dcc, html
 
 from app.core.config import get_settings
+from app.dashboard.theme import PAGE_SIZE, THEME
+from app.dashboard.utils.api import fetch_json
+from app.dashboard.views.detail import build_detail_panel
+from app.dashboard.views.feed import build_documents_feed
+from app.dashboard.views.hero import build_hero_section
+from app.dashboard.views.overview import build_overview_panel
+from app.dashboard.views.sidebar import build_filter_options, build_filter_sidebar
 
 settings = get_settings()
 API_BASE = f"http://{settings.API_HOST}:{settings.API_PORT}"
-
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
 
 dash_app = dash.Dash(
     __name__,
@@ -25,263 +26,211 @@ dash_app = dash.Dash(
     suppress_callback_exceptions=True,
 )
 
-# ---------------------------------------------------------------------------
-# Layout
-# ---------------------------------------------------------------------------
-
 dash_app.layout = html.Div(
-    style={"fontFamily": "Inter, sans-serif", "padding": "24px", "maxWidth": "1200px", "margin": "0 auto"},
+    style={
+        "minHeight": "100vh",
+        "background": "radial-gradient(circle at top left, #efe4cf 0%, #f4efe5 45%, #ebe2d2 100%)",
+        "padding": "28px 18px 56px",
+        "fontFamily": '"Avenir Next", "Segoe UI", sans-serif',
+        "color": THEME["text"],
+    },
     children=[
-        html.H1("Legal Radar", style={"color": "#1a1a2e", "marginBottom": "4px"}),
-        html.P("AI-powered legal monitoring dashboard", style={"color": "#666", "marginBottom": "24px"}),
-
-        # Filters
+        dcc.Store(id="documents-store"),
+        dcc.Store(id="dashboard-state"),
+        dcc.Store(id="selected-document-id"),
         html.Div(
-            style={"display": "flex", "gap": "16px", "marginBottom": "24px", "alignItems": "flex-end"},
+            style={
+                "maxWidth": "1380px",
+                "margin": "0 auto",
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": "22px",
+            },
             children=[
-                html.Div([
-                    html.Label("Legal Area", style={"fontSize": "12px", "fontWeight": "600", "color": "#555"}),
-                    dcc.Dropdown(
-                        id="filter-legal-area",
-                        options=[
-                            {"label": "All areas", "value": ""},
-                            {"label": "Environment", "value": "environment"},
-                            {"label": "Planning Law", "value": "planning_law"},
-                            {"label": "Nature Protection", "value": "nature_protection"},
-                            {"label": "Waste Regulation", "value": "waste_regulation"},
-                            {"label": "Water Regulation", "value": "water_regulation"},
-                        ],
-                        value="",
-                        clearable=False,
-                        style={"width": "220px"},
-                    ),
-                ]),
-                html.Div([
-                    html.Label("Case type", style={"fontSize": "12px", "fontWeight": "600", "color": "#555"}),
-                    dcc.Checklist(
-                        id="filter-principial",
-                        options=[{"label": "  Principial cases only", "value": "principial"}],
-                        value=[],
-                        style={"paddingTop": "8px"},
-                    ),
-                ]),
-                html.Button(
-                    "Refresh",
-                    id="btn-refresh",
-                    n_clicks=0,
+                build_hero_section(),
+                dcc.Loading(
+                    color=THEME["primary"],
+                    children=html.Div(id="overview-panel"),
+                ),
+                html.Div(
                     style={
-                        "padding": "8px 20px",
-                        "backgroundColor": "#4361ee",
-                        "color": "white",
-                        "border": "none",
-                        "borderRadius": "6px",
-                        "cursor": "pointer",
+                        "display": "flex",
+                        "gap": "22px",
+                        "alignItems": "flex-start",
+                        "flexWrap": "wrap",
                     },
+                    children=[
+                        build_filter_sidebar(),
+                        html.Div(
+                            style={
+                                "flex": "999 1 760px",
+                                "minWidth": "320px",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "gap": "22px",
+                            },
+                            children=[
+                                dcc.Loading(
+                                    color=THEME["primary"],
+                                    children=html.Div(id="documents-feed"),
+                                ),
+                                dcc.Loading(
+                                    color=THEME["primary"],
+                                    children=html.Div(id="detail-panel"),
+                                ),
+                            ],
+                        ),
+                    ],
                 ),
             ],
         ),
-
-        # Document table
-        html.Div(id="documents-container"),
-
-        # Detail panel (shown when a row is selected)
-        html.Div(id="detail-panel", style={"marginTop": "32px"}),
-
-        # Interval auto-refresh (every 5 minutes)
         dcc.Interval(id="auto-refresh", interval=5 * 60 * 1000, n_intervals=0),
     ],
 )
 
-# ---------------------------------------------------------------------------
-# Callbacks
-# ---------------------------------------------------------------------------
-
 
 @callback(
-    Output("documents-container", "children"),
+    Output("documents-store", "data"),
+    Output("dashboard-state", "data"),
     Input("btn-refresh", "n_clicks"),
     Input("auto-refresh", "n_intervals"),
-    Input("filter-legal-area", "value"),
     Input("filter-principial", "value"),
 )
-def update_documents_table(
+def load_documents(
     _n_clicks: int,
     _n_intervals: int,
-    legal_area: str,
     principial_filter: list[str],
-) -> object:
-    """Fetch documents from API and render the table."""
-    params: dict[str, object] = {"page_size": 50}
-    if legal_area:
-        params["legal_area"] = legal_area
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load the latest documents for the dashboard."""
+    params: dict[str, object] = {"page_size": PAGE_SIZE}
     if "principial" in (principial_filter or []):
         params["principial_only"] = True
 
+    fetched_at = datetime.now().strftime("%d.%m.%Y %H:%M")
+
     try:
-        response = httpx.get(f"{API_BASE}/documents", params=params, timeout=10.0)
-        response.raise_for_status()
-        data = response.json()
-        items = data.get("items", [])
-    except Exception as exc:
-        return html.Div(
-            f"Could not load documents: {exc}",
-            style={"color": "red", "padding": "16px"},
-        )
-
-    if not items:
-        return html.P("No documents found.", style={"color": "#888"})
-
-    table_data = [
-        {
-            "Title": item.get("title", ""),
-            "Source": item.get("source", ""),
-            "Legal Area": item.get("legal_area", ""),
-            "Published": item.get("publication_date", ""),
-            "ID": item.get("id", ""),
+        payload = fetch_json(API_BASE, "/documents", params=params)
+        items = payload.get("items", [])
+        return items, {
+            "status": "ready",
+            "fetched_at": fetched_at,
+            "message": "",
+            "page_size": PAGE_SIZE,
+            "total": payload.get("total", len(items)),
         }
-        for item in items
-    ]
+    except Exception as exc:
+        return [], {
+            "status": "error",
+            "fetched_at": fetched_at,
+            "message": str(exc),
+            "page_size": PAGE_SIZE,
+            "total": 0,
+        }
 
-    return dash_table.DataTable(
-        id="documents-table",
-        columns=[
-            {"name": "Title", "id": "Title"},
-            {"name": "Source", "id": "Source"},
-            {"name": "Legal Area", "id": "Legal Area"},
-            {"name": "Published", "id": "Published"},
-            {"name": "ID", "id": "ID", "hidden": True},
-        ],
-        data=table_data,
-        row_selectable="single",
-        style_table={"overflowX": "auto"},
-        style_cell={
-            "textAlign": "left",
-            "padding": "10px 14px",
-            "fontFamily": "Inter, sans-serif",
-            "fontSize": "14px",
-        },
-        style_header={
-            "backgroundColor": "#f0f2ff",
-            "fontWeight": "700",
-            "borderBottom": "2px solid #4361ee",
-        },
-        style_data_conditional=[
-            {"if": {"row_index": "odd"}, "backgroundColor": "#fafafa"},
-        ],
-        page_size=20,
+
+@callback(
+    Output("filter-legal-area", "options"),
+    Output("filter-source", "options"),
+    Output("overview-panel", "children"),
+    Input("documents-store", "data"),
+    Input("dashboard-state", "data"),
+)
+def update_filter_options_and_overview(
+    documents: list[dict[str, Any]] | None,
+    dashboard_state: dict[str, Any] | None,
+) -> tuple[list[dict[str, str]], list[dict[str, str]], object]:
+    """Update dynamic filter options and overview state."""
+    legal_area_options, source_options = build_filter_options(documents)
+    overview = build_overview_panel(documents, dashboard_state)
+    return legal_area_options, source_options, overview
+
+
+@callback(
+    Output("filter-search", "value"),
+    Output("filter-legal-area", "value"),
+    Output("filter-source", "value"),
+    Output("filter-principial", "value"),
+    Output("filter-has-text", "value"),
+    Input("btn-clear-filters", "n_clicks"),
+    prevent_initial_call=True,
+)
+def clear_filters(_n_clicks: int) -> tuple[str, str, str, list[str], list[str]]:
+    """Reset all dashboard filters."""
+    return "", "", "", [], []
+
+
+@callback(
+    Output("selected-document-id", "data"),
+    Input("documents-store", "data"),
+    Input({"type": "open-document", "document_id": ALL}, "n_clicks"),
+    State("selected-document-id", "data"),
+)
+def select_document(
+    documents: list[dict[str, Any]] | None,
+    _clicks: list[int] | None,
+    current_document_id: str | None,
+) -> str | None:
+    """Keep a stable selected document and switch when a card button is clicked."""
+    items = documents or []
+    triggered = ctx.triggered_id
+
+    if isinstance(triggered, dict):
+        return str(triggered.get("document_id"))
+
+    document_ids = {str(doc.get("id")) for doc in items if doc.get("id")}
+    if current_document_id in document_ids:
+        return current_document_id
+
+    if items:
+        first_id = items[0].get("id")
+        return str(first_id) if first_id else None
+
+    return None
+
+
+@callback(
+    Output("documents-feed", "children"),
+    Input("documents-store", "data"),
+    Input("dashboard-state", "data"),
+    Input("filter-search", "value"),
+    Input("filter-legal-area", "value"),
+    Input("filter-source", "value"),
+    Input("filter-has-text", "value"),
+    Input("selected-document-id", "data"),
+)
+def render_documents_feed(
+    documents: list[dict[str, Any]] | None,
+    dashboard_state: dict[str, Any] | None,
+    search_value: str,
+    legal_area: str,
+    source: str,
+    has_text_only: list[str],
+    selected_document_id: str | None,
+) -> object:
+    """Render the document feed."""
+    return build_documents_feed(
+        documents,
+        dashboard_state,
+        search_value,
+        legal_area,
+        source,
+        has_text_only,
+        selected_document_id,
     )
 
 
 @callback(
     Output("detail-panel", "children"),
-    Input("documents-table", "selected_rows"),
-    Input("documents-table", "data"),
+    Input("selected-document-id", "data"),
+    Input("documents-store", "data"),
 )
-def show_document_detail(
-    selected_rows: list[int] | None,
-    table_data: list[dict[str, str]] | None,
+def render_detail_panel(
+    selected_document_id: str | None,
+    documents: list[dict[str, Any]] | None,
 ) -> object:
-    """Fetch and display summary + novelty score for the selected document."""
-    if not selected_rows or not table_data:
-        return html.Div()
+    """Render the selected document detail panel."""
+    return build_detail_panel(API_BASE, selected_document_id, documents)
 
-    row = table_data[selected_rows[0]]
-    doc_id = row.get("ID", "")
-
-    try:
-        doc_resp = httpx.get(f"{API_BASE}/documents/{doc_id}", timeout=10.0)
-        doc_resp.raise_for_status()
-        doc = doc_resp.json()
-    except Exception as exc:
-        return html.Div(f"Error loading document: {exc}", style={"color": "red"})
-
-    # Try to load summary for novelty score and principial flag
-    summary = None
-    try:
-        sum_resp = httpx.get(f"{API_BASE}/documents/{doc_id}/summary", timeout=10.0)
-        if sum_resp.status_code == 200:
-            summary = sum_resp.json()
-    except Exception:
-        pass
-
-    badges = []
-    if summary and summary.get("principial"):
-        badges.append(
-            html.Span(
-                "Principial Decision",
-                style={
-                    "backgroundColor": "#4361ee",
-                    "color": "white",
-                    "fontSize": "11px",
-                    "fontWeight": "700",
-                    "padding": "3px 10px",
-                    "borderRadius": "12px",
-                    "marginRight": "8px",
-                    "letterSpacing": "0.5px",
-                },
-            )
-        )
-
-    novelty_section = []
-    if summary and summary.get("novelty_score") is not None:
-        score = float(summary["novelty_score"])
-        novelty_section = [
-            html.Div(
-                style={"marginBottom": "16px"},
-                children=[
-                    html.Label(
-                        f"Novelty Score: {score:.0%}",
-                        style={"fontSize": "12px", "fontWeight": "600", "color": "#555", "marginBottom": "4px", "display": "block"},
-                    ),
-                    html.Div(
-                        style={"backgroundColor": "#e0e0e0", "borderRadius": "4px", "height": "8px", "width": "100%"},
-                        children=[
-                            html.Div(
-                                style={
-                                    "backgroundColor": "#4361ee",
-                                    "height": "8px",
-                                    "borderRadius": "4px",
-                                    "width": f"{score * 100:.0f}%",
-                                }
-                            )
-                        ],
-                    ),
-                ],
-            )
-        ]
-
-    raw_preview = (
-        doc.get("raw_text", "")[:500] + "…"
-        if doc.get("raw_text")
-        else "No full text available."
-    )
-
-    return html.Div(
-        style={
-            "border": "1px solid #e0e0e0",
-            "borderRadius": "8px",
-            "padding": "24px",
-            "backgroundColor": "#f9f9ff",
-        },
-        children=[
-            html.Div(
-                style={"display": "flex", "alignItems": "center", "marginBottom": "8px"},
-                children=[html.H3(doc.get("title", ""), style={"margin": "0", "color": "#1a1a2e", "flex": "1"})] + badges,
-            ),
-            html.P(
-                f"Source: {doc.get('source', '')} · Published: {doc.get('publication_date', '')} · Area: {doc.get('legal_area', '')}",
-                style={"color": "#666", "fontSize": "13px", "marginBottom": "16px"},
-            ),
-            *novelty_section,
-            html.Hr(),
-            html.P(raw_preview, style={"lineHeight": "1.6"}),
-        ],
-    )
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     dash_app.run(
