@@ -56,12 +56,17 @@ def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
                 if selected
                 else f"1px solid {THEME['border']}"
             ),
-            "borderRadius": THEME["radius_md"],
-            "padding": "18px",
-            "boxShadow": (
-                "0 18px 40px rgba(22, 51, 47, 0.09)"
+            "borderTop": (
+                f"5px solid {THEME['primary']}"
                 if selected
-                else "0 8px 20px rgba(22, 51, 47, 0.05)"
+                else f"4px solid {THEME['border']}"
+            ),
+            "borderRadius": THEME["radius_md"],
+            "padding": "22px 22px 20px",
+            "boxShadow": (
+                "0 18px 40px rgba(122, 31, 36, 0.10)"
+                if selected
+                else "0 10px 24px rgba(122, 31, 36, 0.05)"
             ),
         },
         children=[
@@ -83,9 +88,9 @@ def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
                                 style={
                                     "margin": "0 0 8px",
                                     "color": THEME["text"],
-                                    "fontSize": "21px",
+                                    "fontSize": "25px",
                                     "lineHeight": "1.2",
-                                    "fontFamily": '"Iowan Old Style", "Palatino Linotype", serif',
+                                    "fontFamily": THEME["font_serif"],
                                 },
                             ),
                             html.P(
@@ -100,18 +105,19 @@ def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
                         ],
                     ),
                     html.Button(
-                        "Åbn analyse",
+                        "Åbn analyse ->",
                         id={"type": "open-document", "document_id": document.get("id")},
                         n_clicks=0,
                         style={
-                            "padding": "11px 16px",
-                            "borderRadius": "999px",
+                            "padding": "12px 18px",
+                            "borderRadius": THEME["radius_sm"],
                             "border": f"1px solid {THEME['primary']}",
                             "backgroundColor": THEME["primary"] if selected else "transparent",
                             "color": THEME["surface"] if selected else THEME["primary"],
                             "fontWeight": "700",
                             "cursor": "pointer",
                             "minWidth": "140px",
+                            "letterSpacing": "0.02em",
                         },
                     ),
                 ],
@@ -136,8 +142,8 @@ def _render_document_card(document: dict[str, Any], selected: bool) -> html.Div:
                 style={
                     "margin": "0",
                     "color": THEME["text"],
-                    "fontSize": "14px",
-                    "lineHeight": "1.7",
+                    "fontSize": "15px",
+                    "lineHeight": "1.8",
                 },
             ),
         ],
@@ -169,6 +175,8 @@ def build_documents_feed(
             "alignItems": "flex-end",
             "gap": "14px",
             "flexWrap": "wrap",
+            "paddingBottom": "10px",
+            "borderBottom": f"1px solid {THEME['border']}",
         },
         children=[
             html.Div(
@@ -189,7 +197,7 @@ def build_documents_feed(
                         style={
                             "margin": "0",
                             "fontSize": "34px",
-                            "fontFamily": '"Iowan Old Style", "Palatino Linotype", serif',
+                            "fontFamily": THEME["font_serif"],
                         },
                     ),
                 ]

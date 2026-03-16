@@ -38,7 +38,12 @@ def build_overview_panel(
     latest_date = max((str(doc.get("publication_date") or "") for doc in items), default="")
 
     return html.Div(
-        style={"display": "flex", "flexDirection": "column", "gap": "18px"},
+        style={
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": "20px",
+            "paddingBottom": "4px",
+        },
         children=[
             html.Div(
                 style={
@@ -47,6 +52,8 @@ def build_overview_panel(
                     "alignItems": "flex-end",
                     "gap": "16px",
                     "flexWrap": "wrap",
+                    "paddingBottom": "10px",
+                    "borderBottom": f"1px solid {THEME['border']}",
                 },
                 children=[
                     html.Div(
@@ -67,7 +74,7 @@ def build_overview_panel(
                                 style={
                                     "margin": "0",
                                     "fontSize": "34px",
-                                    "fontFamily": '"Iowan Old Style", "Palatino Linotype", serif',
+                                    "fontFamily": THEME["font_serif"],
                                 },
                             ),
                         ]

@@ -29,9 +29,14 @@ dash_app = dash.Dash(
 dash_app.layout = html.Div(
     style={
         "minHeight": "100vh",
-        "background": "radial-gradient(circle at top left, #efe4cf 0%, #f4efe5 45%, #ebe2d2 100%)",
-        "padding": "28px 18px 56px",
-        "fontFamily": '"Avenir Next", "Segoe UI", sans-serif',
+        "background": (
+            "radial-gradient(circle at top left, rgba(122, 31, 36, 0.08) 0%, rgba(122, 31, 36, 0.0) 22%), "
+            "radial-gradient(circle at 80% 18%, rgba(182, 91, 58, 0.08) 0%, rgba(182, 91, 58, 0.0) 18%), "
+            "linear-gradient(180deg, #fbf8f3 0%, #f4efe8 48%, #efe8de 100%)"
+        ),
+        "borderTop": f"5px solid {THEME['primary']}",
+        "padding": "28px 18px 64px",
+        "fontFamily": THEME["font_sans"],
         "color": THEME["text"],
     },
     children=[
@@ -44,7 +49,7 @@ dash_app.layout = html.Div(
                 "margin": "0 auto",
                 "display": "flex",
                 "flexDirection": "column",
-                "gap": "22px",
+                "gap": "26px",
             },
             children=[
                 build_hero_section(),

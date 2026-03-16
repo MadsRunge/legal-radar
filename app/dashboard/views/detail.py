@@ -152,12 +152,13 @@ def build_detail_panel(
         style={
             "backgroundColor": THEME["surface"],
             "border": f"1px solid {THEME['border']}",
+            "borderTop": f"5px solid {THEME['primary']}",
             "borderRadius": THEME["radius_lg"],
-            "padding": "26px",
-            "boxShadow": "0 16px 44px rgba(22, 51, 47, 0.08)",
+            "padding": "28px",
+            "boxShadow": "0 16px 44px rgba(122, 31, 36, 0.08)",
             "display": "flex",
             "flexDirection": "column",
-            "gap": "18px",
+            "gap": "20px",
         },
         children=[
             html.Div(
@@ -187,9 +188,9 @@ def build_detail_panel(
                                 str(document.get("title", "Ukendt dokument")),
                                 style={
                                     "margin": "0 0 12px",
-                                    "fontSize": "38px",
+                                    "fontSize": "42px",
                                     "lineHeight": "1.05",
-                                    "fontFamily": '"Iowan Old Style", "Palatino Linotype", serif',
+                                    "fontFamily": THEME["font_serif"],
                                 },
                             ),
                             html.Div(
@@ -203,7 +204,7 @@ def build_detail_panel(
                             "flex": "0 0 220px",
                             "backgroundColor": THEME["surface_alt"],
                             "borderRadius": THEME["radius_md"],
-                            "padding": "16px",
+                            "padding": "18px",
                             "border": f"1px solid {THEME['border']}",
                         },
                         children=[

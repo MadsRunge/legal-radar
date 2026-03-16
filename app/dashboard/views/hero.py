@@ -10,11 +10,16 @@ def build_hero_section() -> html.Section:
     """Build the dashboard hero banner."""
     return html.Section(
         style={
-            "background": "linear-gradient(135deg, #16332f 0%, #244641 55%, #355c55 100%)",
+            "background": (
+                "linear-gradient(180deg, rgba(122, 31, 36, 0.06) 0%, rgba(122, 31, 36, 0.0) 100%), "
+                "radial-gradient(circle at top left, #fffdf9 0%, #f3ece3 48%, #eadfce 100%)"
+            ),
             "borderRadius": THEME["radius_lg"],
-            "padding": "34px",
+            "borderTop": f"6px solid {THEME['primary']}",
+            "border": f"1px solid {THEME['border']}",
+            "padding": "38px 40px",
             "boxShadow": THEME["shadow"],
-            "color": THEME["surface"],
+            "color": THEME["text"],
         },
         children=[
             html.Div(
@@ -34,7 +39,7 @@ def build_hero_section() -> html.Section:
                                     "display": "flex",
                                     "gap": "10px",
                                     "flexWrap": "wrap",
-                                    "marginBottom": "16px",
+                                    "marginBottom": "18px",
                                 },
                                 children=[
                                     badge("Dansk retsmonitorering", "accent"),
@@ -46,10 +51,11 @@ def build_hero_section() -> html.Section:
                                 "Legal Radar",
                                 style={
                                     "margin": "0 0 12px",
-                                    "fontSize": "52px",
-                                    "lineHeight": "0.95",
-                                    "fontFamily": '"Iowan Old Style", "Palatino Linotype", serif',
+                                    "fontSize": "60px",
+                                    "lineHeight": "0.92",
+                                    "fontFamily": THEME["font_serif"],
                                     "fontWeight": "700",
+                                    "letterSpacing": "-0.03em",
                                 },
                             ),
                             html.P(
@@ -60,9 +66,9 @@ def build_hero_section() -> html.Section:
                                 ),
                                 style={
                                     "margin": "0",
-                                    "fontSize": "18px",
-                                    "lineHeight": "1.7",
-                                    "color": "#e5efe8",
+                                    "fontSize": "19px",
+                                    "lineHeight": "1.8",
+                                    "color": THEME["muted"],
                                     "maxWidth": "700px",
                                 },
                             ),
@@ -71,10 +77,14 @@ def build_hero_section() -> html.Section:
                     html.Div(
                         style={
                             "flex": "0 0 280px",
-                            "backgroundColor": "rgba(255, 253, 248, 0.08)",
-                            "border": "1px solid rgba(255, 253, 248, 0.18)",
-                            "borderRadius": "22px",
-                            "padding": "18px",
+                            "background": (
+                                "linear-gradient(135deg, #7a1f24 0%, #8f2a30 68%, #a83d3a 100%)"
+                            ),
+                            "border": f"1px solid {THEME['primary']}",
+                            "borderRadius": THEME["radius_md"],
+                            "padding": "24px",
+                            "color": THEME["surface"],
+                            "boxShadow": "0 18px 36px rgba(122, 31, 36, 0.18)",
                         },
                         children=[
                             html.P(
@@ -85,15 +95,16 @@ def build_hero_section() -> html.Section:
                                     "fontWeight": "700",
                                     "letterSpacing": "0.08em",
                                     "textTransform": "uppercase",
-                                    "color": "#d6e6de",
+                                    "color": "#f3ddd5",
                                 },
                             ),
                             html.H3(
                                 "Seneste juridiske ændringer",
                                 style={
                                     "margin": "0 0 10px",
-                                    "fontSize": "24px",
-                                    "lineHeight": "1.2",
+                                    "fontSize": "30px",
+                                    "lineHeight": "1.1",
+                                    "fontFamily": THEME["font_serif"],
                                 },
                             ),
                             html.P(
@@ -105,7 +116,7 @@ def build_hero_section() -> html.Section:
                                     "margin": "0",
                                     "fontSize": "14px",
                                     "lineHeight": "1.6",
-                                    "color": "#d6e6de",
+                                    "color": "#f7ebe6",
                                 },
                             ),
                         ],

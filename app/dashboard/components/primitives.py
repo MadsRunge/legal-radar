@@ -19,13 +19,14 @@ def badge(label: str, tone: str = "neutral") -> html.Span:
         style={
             "display": "inline-flex",
             "alignItems": "center",
-            "padding": "6px 10px",
+            "padding": "5px 10px",
             "borderRadius": "999px",
             "backgroundColor": background,
             "color": color,
-            "fontSize": "11px",
+            "border": f"1px solid {color}22",
+            "fontSize": "10px",
             "fontWeight": "700",
-            "letterSpacing": "0.04em",
+            "letterSpacing": "0.08em",
             "textTransform": "uppercase",
         },
     )
@@ -39,9 +40,10 @@ def metric_card(label: str, value: str, note: str) -> html.Div:
             "minWidth": "180px",
             "backgroundColor": THEME["surface"],
             "border": f"1px solid {THEME['border']}",
+            "borderTop": f"4px solid {THEME['primary']}",
             "borderRadius": THEME["radius_md"],
-            "padding": "18px 18px 16px",
-            "boxShadow": "0 8px 24px rgba(22, 51, 47, 0.06)",
+            "padding": "20px 20px 18px",
+            "boxShadow": "0 12px 30px rgba(122, 31, 36, 0.06)",
         },
         children=[
             html.P(
@@ -52,16 +54,17 @@ def metric_card(label: str, value: str, note: str) -> html.Div:
                     "fontSize": "12px",
                     "fontWeight": "700",
                     "textTransform": "uppercase",
-                    "letterSpacing": "0.06em",
+                    "letterSpacing": "0.1em",
                 },
             ),
             html.Div(
                 value,
                 style={
                     "color": THEME["text"],
-                    "fontSize": "30px",
+                    "fontSize": "34px",
                     "fontWeight": "700",
                     "lineHeight": "1",
+                    "fontFamily": THEME["font_serif"],
                 },
             ),
             html.P(
@@ -89,8 +92,9 @@ def info_panel(title: str, body: object, tone: str = "neutral") -> html.Div:
         style={
             "backgroundColor": background,
             "border": f"1px solid {border}",
+            "borderTop": f"3px solid {heading}",
             "borderRadius": THEME["radius_md"],
-            "padding": "18px",
+            "padding": "20px",
         },
         children=[
             html.H4(
@@ -98,13 +102,14 @@ def info_panel(title: str, body: object, tone: str = "neutral") -> html.Div:
                 style={
                     "margin": "0 0 8px",
                     "color": heading,
-                    "fontSize": "15px",
+                    "fontSize": "18px",
                     "fontWeight": "700",
+                    "fontFamily": THEME["font_serif"],
                 },
             ),
             html.Div(
                 body,
-                style={"color": THEME["text"], "fontSize": "14px", "lineHeight": "1.6"},
+                style={"color": THEME["text"], "fontSize": "14px", "lineHeight": "1.75"},
             ),
         ],
     )
